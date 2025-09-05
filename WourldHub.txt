@@ -1,0 +1,792 @@
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local CoreGui = game:GetService("CoreGui")
+local HttpService = game:GetService("HttpService")
+local Lighting = game:GetService("Lighting")
+
+local injector_name = "Unknown"
+if syn and syn.request then
+    injector_name = "Synapse X"
+elseif PROTOSMASHER_LOADED then
+    injector_name = "ProtoSmasher"
+elseif secure_load then
+    injector_name = "ScriptWare"
+elseif KRNL_LOADED then
+    injector_name = "Krnl"
+elseif IsElectron then
+    injector_name = "Electron"
+end
+
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+    Name = "Wourld Hub | By @Banhoto",
+    LoadingTitle = "Loading Wourld Hub",
+    LoadingSubtitle = "By @Banhoto",
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = "WourldHubConfigs",
+        FileName = "WourldConfig"
+    },
+    Discord = {
+        Enabled = false
+    }
+})
+
+local noclipActive = false
+local espActive = false
+local espObjects = {}
+local flyActive = false
+local flySpeed = 50
+local xrayActive = false
+local infJumpEnabled = false
+local antiAfkEnabled = true
+local tracersActive = false
+local flyConnection
+local bodyVelocity
+
+local MainTab = Window:CreateTab("Main", 4483362458)
+
+MainTab:CreateSection("Character")
+
+local WalkSpeedSlider = MainTab:CreateSlider({
+    Name = "WalkSpeed",
+    Range = {16, 200},
+    Increment = 1,
+    Suffix = "units",
+    CurrentValue = 16,
+    Callback = function(Value)
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
+            LocalPlayer.Character:FindFirstChildOfClass("Humanoid").WalkSpeed = Value
+        end
+    end,
+})
+
+local JumpPowerSlider = MainTab:CreateSlider({
+    Name = "JumpPower",
+    Range = {50, 300},
+    Increment = 1,
+    Suffix = "units",
+    CurrentValue = 50,
+    Callback = function(Value)
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
+            LocalPlayer.Character:FindFirstChildOfClass("Humanoid").JumpPower = Value
+        end
+    end,
+})
+
+MainTab:CreateToggle({
+    Name = "Infinite Jump",
+    CurrentValue = false,
+    Callback = function(Value)
+        infJumpEnabled = Value
+    end,
+})
+
+MainTab:CreateButton({
+    Name = "Refresh Character",
+    Callback = function()
+        LocalPlayer.Character:BreakJoints()
+    end,
+})
+
+MainTab:CreateToggle({
+    Name = "Noclip (N)",
+    CurrentValue = false,
+    Callback = function(Value)
+        noclipActive = Value
+    end,
+})
+
+RunService.Stepped:Connect(function()
+    if noclipActive and LocalPlayer.Character then
+        for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = false
+            end
+        end
+    end
+    
+    if infJumpEnabled and UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
+            LocalPlayer.Character:FindFirstChildOfClass("Humanoid"):ChangeState(Enum.HumanoidStateType.Jumping)
+        end
+    end
+end)
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if not gameProcessed and input.KeyCode == Enum.KeyCode.N then
+        noclipActive = not noclipActive
+        Rayfield:Notify({
+            Title = "Noclip",
+            Content = noclipActive and "Enabled" or "Disabled",
+            Duration = 1.5,
+            Image = 4483362458,
+        })
+    end
+end)
+
+local TpTab = Window:CreateTab("Teleport", 6031075938)
+
+TpTab:CreateSection("Player Teleport")
+
+TpTab:CreateInput({
+    Name = "Teleport to Player by Name",
+    PlaceholderText = "Player Name",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(playerName)
+        local target = Players:FindFirstChild(playerName)
+        if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            LocalPlayer.Character.HumanoidRootPart.CFrame = target.Character.HumanoidRootPart.CFrame
+            Rayfield:Notify({
+                Title = "Teleport",
+                Content = "Teleported to " .. playerName,
+                Duration = 3,
+                Image = 6031075938,
+            })
+        else
+            Rayfield:Notify({
+                Title = "Error",
+                Content = "Player not found: " .. playerName,
+                Duration = 3,
+                Image = 6031075938,
+            })
+        end
+    end,
+})
+
+local playerList = {}
+for _, player in pairs(Players:GetPlayers()) do
+    if player ~= LocalPlayer then
+        table.insert(playerList, player.Name)
+    end
+end
+
+TpTab:CreateDropdown({
+    Name = "Teleport to Player (list)",
+    Options = playerList,
+    CurrentOption = playerList[1] or "",
+    Callback = function(Option)
+        local target = Players:FindFirstChild(Option)
+        if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            LocalPlayer.Character.HumanoidRootPart.CFrame = target.Character.HumanoidRootPart.CFrame
+            Rayfield:Notify({
+                Title = "Teleport",
+                Content = "Teleported to " .. Option,
+                Duration = 3,
+                Image = 6031075938,
+            })
+        end
+    end,
+})
+
+TpTab:CreateSection("Locations")
+
+TpTab:CreateDropdown({
+    Name = "Quick Teleport",
+    Options = {"Spawn", "Base", "Arena", "Roof", "Underground"},
+    CurrentOption = "Spawn",
+    Callback = function(Option)
+        local locations = {
+            Spawn = CFrame.new(0, 5, 0),
+            Base = CFrame.new(50, 5, 50),
+            Arena = CFrame.new(100, 5, 0),
+            Roof = CFrame.new(0, 100, 0),
+            Underground = CFrame.new(0, -50, 0)
+        }
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            LocalPlayer.Character.HumanoidRootPart.CFrame = locations[Option]
+            Rayfield:Notify({
+                Title = "Teleport",
+                Content = "Teleported to: " .. Option,
+                Duration = 3,
+                Image = 6031075938,
+            })
+        end
+    end,
+})
+
+TpTab:CreateSection("Flight")
+
+TpTab:CreateToggle({
+    Name = "Fly (WASD + Space/Shift)",
+    CurrentValue = false,
+    Callback = function(Value)
+        flyActive = Value
+        if flyActive then
+            if bodyVelocity then bodyVelocity:Destroy() end
+            bodyVelocity = Instance.new("BodyVelocity")
+            bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+            bodyVelocity.MaxForce = Vector3.new(10000, 10000, 10000)
+            bodyVelocity.Parent = LocalPlayer.Character.HumanoidRootPart
+            
+            if flyConnection then flyConnection:Disconnect() end
+            flyConnection = RunService.Heartbeat:Connect(function()
+                if not flyActive or not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                    if flyConnection then flyConnection:Disconnect() end
+                    if bodyVelocity then bodyVelocity:Destroy() end
+                    return
+                end
+                
+                local camera = workspace.CurrentCamera
+                local root = LocalPlayer.Character.HumanoidRootPart
+                
+                local direction = Vector3.new()
+                if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+                    direction = direction + camera.CFrame.LookVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+                    direction = direction - camera.CFrame.LookVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+                    direction = direction - camera.CFrame.RightVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+                    direction = direction + camera.CFrame.RightVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+                    direction = direction + Vector3.new(0, 1, 0)
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+                    direction = direction - Vector3.new(0, 1, 0)
+                end
+                
+                bodyVelocity.Velocity = direction * flySpeed
+            end)
+        else
+            if flyConnection then flyConnection:Disconnect() end
+            if bodyVelocity then bodyVelocity:Destroy() end
+        end
+    end,
+})
+
+TpTab:CreateSlider({
+    Name = "Fly Speed",
+    Range = {10, 200},
+    Increment = 5,
+    Suffix = "units",
+    CurrentValue = 50,
+    Callback = function(Value)
+        flySpeed = Value
+    end,
+})
+
+local VisualTab = Window:CreateTab("Visuals", 7733960981)
+
+VisualTab:CreateSection("ESP")
+
+VisualTab:CreateToggle({
+    Name = "Player ESP",
+    CurrentValue = false,
+    Callback = function(Value)
+        espActive = Value
+        if espActive then
+            for _, player in pairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer and player.Character then
+                    createEsp(player.Character)
+                end
+            end
+            
+            Players.PlayerAdded:Connect(function(player)
+                player.CharacterAdded:Connect(function(character)
+                    if espActive then
+                        createEsp(character)
+                    end
+                end)
+            end)
+        else
+            for _, obj in pairs(espObjects) do
+                if obj then
+                    obj:Destroy()
+                end
+            end
+            espObjects = {}
+        end
+    end,
+})
+
+function createEsp(character)
+    local highlight = Instance.new("Highlight")
+    highlight.FillColor = Color3.fromRGB(255, 0, 0)
+    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+    highlight.FillTransparency = 0.5
+    highlight.OutlineTransparency = 0
+    highlight.Parent = character
+    highlight.Adornee = character
+    table.insert(espObjects, highlight)
+    
+    character.DescendantRemoving:Connect(function(descendant)
+        if descendant == highlight then
+            for i, obj in ipairs(espObjects) do
+                if obj == highlight then
+                    table.remove(espObjects, i)
+                    break
+                end
+            end
+        end
+    end)
+end
+
+VisualTab:CreateToggle({
+    Name = "Tracers",
+    CurrentValue = false,
+    Callback = function(Value)
+        tracersActive = Value
+        if tracersActive then
+            createTracers()
+        else
+            for _, obj in pairs(espObjects) do
+                if obj and obj.Name == "Tracer" then
+                    obj:Remove()
+                end
+            end
+        end
+    end,
+})
+
+function createTracers()
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local tracer = Drawing.new("Line")
+            tracer.Thickness = 1
+            tracer.Color = Color3.fromRGB(255, 0, 0)
+            tracer.Visible = true
+            tracer.Name = "Tracer"
+            table.insert(espObjects, tracer)
+            
+            local connection
+            connection = RunService.RenderStepped:Connect(function()
+                if not tracersActive or not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") or not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                    if connection then connection:Disconnect() end
+                    if tracer then tracer:Remove() end
+                    return
+                end
+                
+                local rootPos = player.Character.HumanoidRootPart.Position
+                local camera = workspace.CurrentCamera
+                local screenPos, onScreen = camera:WorldToViewportPoint(rootPos)
+                
+                if onScreen then
+                    tracer.From = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y)
+                    tracer.To = Vector2.new(screenPos.X, screenPos.Y)
+                    tracer.Visible = true
+                else
+                    tracer.Visible = false
+                end
+            end)
+        end
+    end
+end
+
+VisualTab:CreateToggle({
+    Name = "X-Ray (see through walls)",
+    CurrentValue = false,
+    Callback = function(Value)
+        xrayActive = Value
+        if xrayActive then
+            for _, part in pairs(workspace:GetDescendants()) do
+                if part:IsA("BasePart") and part.Transparency < 1 and part.Name ~= "HumanoidRootPart" then
+                    part.LocalTransparencyModifier = 0.7
+                end
+            end
+        else
+            for _, part in pairs(workspace:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.LocalTransparencyModifier = 0
+                end
+            end
+        end
+    end,
+})
+
+VisualTab:CreateSection("Effects")
+
+VisualTab:CreateToggle({
+    Name = "Fullscreen Mode",
+    CurrentValue = false,
+    Callback = function(Value)
+        if Value then
+            game:GetService("GuiService"):SetFullscreen(true)
+        else
+            game:GetService("GuiService"):SetFullscreen(false)
+        end
+    end,
+})
+
+VisualTab:CreateButton({
+    Name = "Improved Graphics",
+    Callback = function()
+        Lighting.GlobalShadows = true
+        Lighting.FogEnd = 10000
+        sethiddenproperty(Lighting, "Technology", "Future")
+        sethiddenproperty(workspace.Terrain, "Decoration", true)
+        
+        Rayfield:Notify({
+            Title = "Graphics",
+            Content = "Graphics settings improved",
+            Duration = 3,
+            Image = 7733960981,
+        })
+    end,
+})
+
+VisualTab:CreateButton({
+    Name = "Remove Effects",
+    Callback = function()
+        for _, effect in pairs(Lighting:GetChildren()) do
+            if effect:IsA("BlurEffect") or effect:IsA("ColorCorrectionEffect") or effect:IsA("SunRaysEffect") then
+                effect.Enabled = false
+            end
+        end
+        
+        Rayfield:Notify({
+            Title = "Effects",
+            Content = "All visual effects disabled",
+            Duration = 3,
+            Image = 7733960981,
+        })
+    end,
+})
+
+local ProfileTab = Window:CreateTab("Profile", 6031071058)
+
+ProfileTab:CreateSection("Information")
+
+ProfileTab:CreateParagraph({
+    Title = "Player Information",
+    Content = "Name: "..LocalPlayer.Name..
+              "\nDisplay Name: "..LocalPlayer.DisplayName..
+              "\nUser ID: "..LocalPlayer.UserId..
+              "\nAccount Age: "..LocalPlayer.AccountAge.." days"..
+              "\nInjector: " .. injector_name
+})
+
+ProfileTab:CreateSection("Actions")
+
+ProfileTab:CreateButton({
+    Name = "Copy Player ID",
+    Callback = function()
+        setclipboard(tostring(LocalPlayer.UserId))
+        Rayfield:Notify({
+            Title = "Clipboard",
+            Content = "Player ID copied",
+            Duration = 2,
+            Image = 6031071058,
+        })
+    end,
+})
+
+ProfileTab:CreateButton({
+    Name = "Copy Player Name",
+    Callback = function()
+        setclipboard(LocalPlayer.Name)
+        Rayfield:Notify({
+            Title = "Clipboard",
+            Content = "Player name copied",
+            Duration = 2,
+            Image = 6031071058,
+        })
+    end,
+})
+
+ProfileTab:CreateButton({
+    Name = "Copy Injector Info",
+    Callback = function()
+        setclipboard("Used injector: " .. injector_name)
+        Rayfield:Notify({
+            Title = "Clipboard",
+            Content = "Injector info copied",
+            Duration = 2,
+            Image = 6031071058,
+        })
+    end,
+})
+
+local SettingsTab = Window:CreateTab("Settings", 6034509993)
+
+SettingsTab:CreateSection("Main")
+
+SettingsTab:CreateToggle({
+    Name = "Anti-AFK",
+    CurrentValue = true,
+    Callback = function(Value)
+        antiAfkEnabled = Value
+        if antiAfkEnabled then
+            local vu = game:GetService("VirtualUser")
+            LocalPlayer.Idled:Connect(function()
+                vu:Button2Down(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
+                task.wait(1)
+                vu:Button2Up(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
+            end)
+        end
+    end,
+})
+
+SettingsTab:CreateToggle({
+    Name = "Hide Interface",
+    CurrentValue = false,
+    Callback = function(Value)
+        Rayfield:ToggleUI(not Value)
+    end,
+})
+
+SettingsTab:CreateKeybind({
+    Name = "Interface Key",
+    CurrentKeybind = "RightShift",
+    HoldToInteract = false,
+    Callback = function(Keybind)
+        Rayfield:ToggleUI()
+    end,
+})
+
+SettingsTab:CreateSection("Configuration Management")
+
+SettingsTab:CreateButton({
+    Name = "Save Settings",
+    Callback = function()
+        Rayfield:SaveConfiguration()
+        Rayfield:Notify({
+            Title = "Configuration",
+            Content = "Settings saved",
+            Duration = 2,
+            Image = 6034509993,
+        })
+    end,
+})
+
+SettingsTab:CreateButton({
+    Name = "Load Settings",
+    Callback = function()
+        Rayfield:LoadConfiguration()
+        Rayfield:Notify({
+            Title = "Configuration",
+            Content = "Settings loaded",
+            Duration = 2,
+            Image = 6034509993,
+        })
+    end,
+})
+
+SettingsTab:CreateButton({
+    Name = "Reset Settings",
+    Callback = function()
+        Rayfield:ResetConfiguration()
+        Rayfield:Notify({
+            Title = "Configuration",
+            Content = "Settings reset",
+            Duration = 2,
+            Image = 6034509993,
+        })
+    end,
+})
+
+local InjectorTab = Window:CreateTab("Injector", 9109718302)
+
+InjectorTab:CreateSection("Injector Information")
+
+InjectorTab:CreateParagraph({
+    Title = "Injector Details",
+    Content = "Detected injector: " .. injector_name
+})
+
+InjectorTab:CreateSection("Injector Functions")
+
+InjectorTab:CreateButton({
+    Name = "Check Capabilities",
+    Callback = function()
+        local capabilities = {}
+        
+        if getconnections then
+            table.insert(capabilities, "✓ GetConnections")
+        else
+            table.insert(capabilities, "✗ GetConnections")
+        end
+        
+        if getscripts then
+            table.insert(capabilities, "✓ GetScripts")
+        else
+            table.insert(capabilities, "✗ GetScripts")
+        end
+        
+        if hookfunction then
+            table.insert(capabilities, "✓ HookFunction")
+        else
+            table.insert(capabilities, "✗ HookFunction")
+        end
+        
+        Rayfield:Notify({
+            Title = "Injector Capabilities",
+            Content = table.concat(capabilities, "\n"),
+            Duration = 6,
+            Image = 9109718302,
+        })
+    end,
+})
+
+InjectorTab:CreateButton({
+    Name = "Clear Memory",
+    Callback = function()
+        local before = collectgarbage("count")
+        collectgarbage()
+        local after = collectgarbage("count")
+        
+        Rayfield:Notify({
+            Title = "Memory Optimization",
+            Content = string.format("Freed: %.2f KB", before - after),
+            Duration = 3,
+            Image = 9109718302,
+        })
+    end,
+})
+
+InjectorTab:CreateButton({
+    Name = "Test Performance",
+    Callback = function()
+        local start = tick()
+        
+        for i = 1, 1000000 do
+            local x = math.sqrt(i)
+        end
+        
+        local timeTaken = tick() - start
+        Rayfield:Notify({
+            Title = "Performance Test",
+            Content = string.format("Execution time: %.3f sec", timeTaken),
+            Duration = 5,
+            Image = 9109718302,
+        })
+    end,
+})
+
+local ScriptsTab = Window:CreateTab("Scripts", 7072718362)
+
+ScriptsTab:CreateSection("Universal Scripts")
+
+ScriptsTab:CreateButton({
+    Name = "Load Invisible Script",
+    Callback = function()
+        Rayfield:Notify({
+            Title = "Loading Script",
+            Content = "Loading Invisible Script...",
+            Duration = 3,
+            Image = 7072718362,
+        })
+        loadstring(game:HttpGet("https://rawscripts.net/raw/Universal-Script-Invisible-script-20557"))()
+    end,
+})
+
+ScriptsTab:CreateButton({
+    Name = "Load Fly Script",
+    Callback = function()
+        Rayfield:Notify({
+            Title = "Loading Script",
+            Content = "Loading Fly Script...",
+            Duration = 3,
+            Image = 7072718362,
+        })
+        loadstring(game:HttpGet("https://pastebin.com/raw/KtPTu2f8", true))()
+    end,
+})
+
+ScriptsTab:CreateButton({
+    Name = "Load Universal Ring Parts",
+    Callback = function()
+        Rayfield:Notify({
+            Title = "Loading Script",
+            Content = "Loading Universal Ring Parts...",
+            Duration = 3,
+            Image = 7072718362,
+        })
+        loadstring(game:HttpGet("https://rawscripts.net/raw/Universal-Script-Super-dual-ring-parts-V7-36699"))()
+    end,
+})
+
+ScriptsTab:CreateButton({
+    Name = "Load FPS Boost",
+    Callback = function()
+        Rayfield:Notify({
+            Title = "Loading Script",
+            Content = "Loading FPS Boost...",
+            Duration = 3,
+            Image = 7072718362,
+        })
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/ZalchikMods/ScriptsRB/main/iniwgi5dct.txt"))()
+    end,
+})
+
+ScriptsTab:CreateSection("Game-Specific Scripts")
+
+ScriptsTab:CreateButton({
+    Name = "Load 99 Nights",
+    Callback = function()
+        Rayfield:Notify({
+            Title = "Loading Script",
+            Content = "Loading 99 Nights...",
+            Duration = 3,
+            Image = 7072718362,
+        })
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/VapeVoidware/VW-Add/main/nightsintheforest.lua", true))()
+    end,
+})
+
+ScriptsTab:CreateButton({
+    Name = "Load Ringa Script",
+    Callback = function()
+        Rayfield:Notify({
+            Title = "Loading Script",
+            Content = "Loading Ringa Script...",
+            Duration = 3,
+            Image = 7072718362,
+        })
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/wefwef127382/inkgames.github.io/refs/heads/main/ringta.lua"))()
+    end,
+})
+
+ScriptsTab:CreateButton({
+    Name = "Load Liberty Tycoon 2",
+    Callback = function()
+        Rayfield:Notify({
+            Title = "Loading Script",
+            Content = "Loading Liberty Tycoon 2...",
+            Duration = 3,
+            Image = 7072718362,
+        })
+        loadstring(game:HttpGet('https://raw.githubusercontent.com/DevKron/Kron_Hub/refs/heads/main/version_1.0'))("")
+    end,
+})
+
+ScriptsTab:CreateButton({
+    Name = "Load YBA Script",
+    Callback = function()
+        Rayfield:Notify({
+            Title = "Loading Script",
+            Content = "Loading YBA Script...",
+            Duration = 3,
+            Image = 7072718362,
+        })
+        loadstring(game:HttpGet("https://api.luarmor.net/files/v3/loaders/fdbac487b2e7ceafb89f7c26351fddb6.lua"))()
+    end,
+})
+
+Rayfield:Notify({
+    Title = "Wourld Hub Loaded",
+    Content = "All functions activated!",
+    Duration = 6,
+    Image = 4483362458,
+})
+
+Players.PlayerAdded:Connect(function(player)
+    table.insert(playerList, player.Name)
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+    for i, name in ipairs(playerList) do
+        if name == player.Name then
+            table.remove(playerList, i)
+            break
+        end
+    end
+end)
